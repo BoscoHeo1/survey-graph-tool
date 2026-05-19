@@ -9,6 +9,13 @@ const Builder = {
         this.survey = survey;
         this.currentType = type;
         this.values = new Array(survey.options.length).fill(0);
+        this.isDragging = false;
+        this.dragIdx = -1;
+        if (!this.docListenerAdded) {
+            document.addEventListener('mouseup', () => this.isDragging = false);
+            document.addEventListener('touchend', () => this.isDragging = false);
+            this.docListenerAdded = true;
+        }
         // 이전 그래프 타입의 이벤트 리스너를 완전히 제거하기 위해
         // 컨테이너를 cloneNode로 교체 (자식 없는 복사본 → 이벤트 없음)
         const old = document.querySelector('#builder-container');
@@ -24,8 +31,6 @@ const Builder = {
     /* ===== BAR CHART BUILDER ===== */
     buildBar(c) {
         const s = this.survey;
-        const rawMax = Math.max(...s.votes, 1);
-        const maxY = rawMax <= 10 ? Math.ceil(rawMax/2)*2+2 : Math.ceil(rawMax*1.2/5)*5;
         let h = '<div class="bb-hint">📌 막대를 클릭하거나 드래그해서 높이를 맞춰 보세요!</div>';
         
         // Settings for axis
@@ -33,6 +38,9 @@ const Builder = {
         h += '<label>가로축: <input type="text" class="bb-axis-inp" id="x-axis-name" placeholder="예: 항목" value="항목"></label>';
         h += '<label>세로축: <input type="text" class="bb-axis-inp" id="y-axis-name" placeholder="예: 학생 수" value="학생 수"></label>';
         h += '<label>단위: <input type="text" class="bb-axis-inp" id="y-axis-unit" placeholder="예: 명" value="명"></label>';
+        h += '<label>눈금 1칸 = <select class="bb-axis-inp" id="y-axis-step">';
+        [1,2,5,10].forEach(n => h += `<option value="${n}">${n}</option>`);
+        h += '</select></label>';
         h += '</div>';
 
         h += '<div class="bb-graph-area" style="position:relative; margin-top:25px;">';
@@ -40,17 +48,7 @@ const Builder = {
         h += '<span id="disp-y-title">학생 수</span> (<span id="disp-y-unit">명</span>)';
         h += '</div>';
 
-        h += '<div class="bb-wrapper"><div class="bb-yaxis">';
-        for (let y = maxY; y >= 0; y--) h += `<div class="bb-yl">${y}</div>`;
-        h += '</div><div class="bb-cols">';
-        s.options.forEach((opt, i) => {
-            h += `<div class="bb-col" data-idx="${i}">`;
-            for (let y = maxY; y >= 1; y--) h += `<div class="bb-cell" data-y="${y}" data-i="${i}" style="background:${this.colors[i%8]}22"></div>`;
-            h += `<div class="bb-val" id="bbv-${i}">0명</div></div>`;
-        });
-        h += '</div></div><div class="bb-labels">';
-        s.options.forEach(o => h += `<div class="bb-lb">${o}</div>`);
-        h += '</div>';
+        h += '<div id="bar-grid-container"></div>'; // Grid Area
         
         h += '<div class="bb-x-label-area" style="text-align:right; font-size:12px; font-weight:600; color:var(--text-secondary); margin-top:5px; padding-right:10px;">';
         h += '<span id="disp-x-title">항목</span>';
@@ -74,34 +72,69 @@ const Builder = {
         c.querySelector('#x-axis-name').addEventListener('input', updateAxisText);
         c.querySelector('#y-axis-name').addEventListener('input', updateAxisText);
         c.querySelector('#y-axis-unit').addEventListener('input', updateAxisText);
+        c.querySelector('#y-axis-step').addEventListener('change', () => {
+            self.values = new Array(s.options.length).fill(0);
+            self.renderBarGrid(c);
+        });
 
-        let dragging = false, dragI = -1;
+        this.renderBarGrid(c);
+    },
+
+    renderBarGrid(c) {
+        const s = this.survey;
+        const container = c.querySelector('#bar-grid-container');
+        if (!container) return;
+
+        const yStep = +(c.querySelector('#y-axis-step')?.value || 1);
+        const rawMax = Math.max(...s.votes, 1);
+        let maxYCells = Math.ceil(rawMax / yStep) + 2;
+        if (maxYCells < 4) maxYCells = 4;
+        if (maxYCells > 20) maxYCells = 20;
+
+        let h = '<div class="bb-wrapper"><div class="bb-yaxis">';
+        for (let y = maxYCells; y >= 0; y--) h += `<div class="bb-yl">${y * yStep}</div>`;
+        h += '</div><div class="bb-cols">';
+        s.options.forEach((opt, i) => {
+            h += `<div class="bb-col" data-idx="${i}">`;
+            for (let y = maxYCells; y >= 1; y--) {
+                const val = y * yStep;
+                h += `<div class="bb-cell" data-y="${val}" data-i="${i}" style="background:${this.colors[i%8]}22"></div>`;
+            }
+            h += `<div class="bb-val" id="bbv-${i}">0명</div></div>`;
+        });
+        h += '</div></div><div class="bb-labels">';
+        s.options.forEach(o => h += `<div class="bb-lb">${o}</div>`);
+        h += '</div>';
+
+        container.innerHTML = h;
+
+        const self = this;
         const setVal = (idx, y) => { self.values[idx] = y; self.updateBar(c, idx); };
-        // 이벤트를 c(컨테이너)가 아닌 bb-cols(그리드)에 붙여
-        // 탭 전환 시 innerHTML 교체와 함께 자동 제거되도록 함
         const grid = c.querySelector('.bb-cols');
+        
         grid.addEventListener('mousedown', e => {
             const cell = e.target.closest('.bb-cell');
-            if (cell) { dragging = true; dragI = +cell.dataset.i; setVal(dragI, +cell.dataset.y); e.preventDefault(); }
+            if (cell) { self.isDragging = true; self.dragIdx = +cell.dataset.i; setVal(self.dragIdx, +cell.dataset.y); e.preventDefault(); }
         });
         grid.addEventListener('mousemove', e => {
-            if (!dragging) return;
+            if (!self.isDragging) return;
             const cell = e.target.closest('.bb-cell');
-            if (cell && +cell.dataset.i === dragI) setVal(dragI, +cell.dataset.y);
+            if (cell && +cell.dataset.i === self.dragIdx) setVal(self.dragIdx, +cell.dataset.y);
         });
         grid.addEventListener('touchstart', e => {
             const cell = e.target.closest('.bb-cell');
-            if (cell) { dragging = true; dragI = +cell.dataset.i; setVal(dragI, +cell.dataset.y); }
+            if (cell) { self.isDragging = true; self.dragIdx = +cell.dataset.i; setVal(self.dragIdx, +cell.dataset.y); }
         }, {passive:true});
         grid.addEventListener('touchmove', e => {
-            if (!dragging) return;
+            if (!self.isDragging) return;
             const t = e.touches[0];
             const el = document.elementFromPoint(t.clientX, t.clientY);
             const cell = el?.closest('.bb-cell');
-            if (cell && +cell.dataset.i === dragI) setVal(dragI, +cell.dataset.y);
+            if (cell && +cell.dataset.i === self.dragIdx) setVal(self.dragIdx, +cell.dataset.y);
         }, {passive:true});
-        document.addEventListener('mouseup', () => dragging = false);
-        document.addEventListener('touchend', () => dragging = false);
+
+        // Initialize display
+        s.options.forEach((opt, i) => self.updateBar(c, i));
     },
 
     updateBar(c, idx) {
@@ -173,10 +206,6 @@ const Builder = {
     /* ===== LINE CHART BUILDER ===== */
     buildLine(c) {
         const s = this.survey;
-        const rawMax = Math.max(...s.votes, 1);
-        const maxY = rawMax <= 10 ? Math.ceil(rawMax/2)*2+2 : Math.ceil(rawMax*1.2/5)*5;
-        const CELL_H = 28; // 고정 셀 높이(px) — Y축과 셀이 정확히 일치하도록
-
         let h = '<div class="bb-hint">📌 각 항목 위치에서 알맞은 높이를 클릭하여 점을 찍으세요!</div>';
 
         // Settings for axis
@@ -184,6 +213,9 @@ const Builder = {
         h += '<label>가로축: <input type="text" class="bb-axis-inp" id="x-axis-name" placeholder="예: 항목" value="항목"></label>';
         h += '<label>세로축: <input type="text" class="bb-axis-inp" id="y-axis-name" placeholder="예: 학생 수" value="학생 수"></label>';
         h += '<label>단위: <input type="text" class="bb-axis-inp" id="y-axis-unit" placeholder="예: 명" value="명"></label>';
+        h += '<label>눈금 1칸 = <select class="bb-axis-inp" id="y-axis-step">';
+        [1,2,5,10].forEach(n => h += `<option value="${n}">${n}</option>`);
+        h += '</select></label>';
         h += '</div>';
 
         h += '<div class="bb-graph-area" style="position:relative; margin-top:25px;">';
@@ -191,44 +223,12 @@ const Builder = {
         h += '<span id="disp-y-title">학생 수</span> (<span id="disp-y-unit">명</span>)';
         h += '</div>';
 
-        // Y축 + 그리드 영역
-        h += '<div class="bb-wrapper">';
-        // Y축 눈금: maxY개 셀에 맞춰 maxY개 눈금 렌더 (0은 하단 축선에 표시)
-        h += `<div class="bb-yaxis lc-yaxis" style="--cell-h:${CELL_H}px">`;
-        for (let y = maxY; y >= 1; y--) {
-            h += `<div class="bb-yl lc-yl" style="height:${CELL_H}px">${y}</div>`;
-        }
-        h += '<div class="bb-yl lc-yl lc-zero" style="height:12px">0</div>';
-        h += '</div>';
-
-        // 그리드 열들 (bb-val 없음 — 완전히 분리)
-        h += '<div class="bb-cols line-mode">';
-        s.options.forEach((opt, i) => {
-            h += `<div class="bb-col lc-col" data-idx="${i}" style="--cell-h:${CELL_H}px">`;
-            for (let y = maxY; y >= 1; y--) {
-                h += `<div class="bb-cell lc" data-y="${y}" data-i="${i}" style="height:${CELL_H}px;min-height:unset" title="${y}명"></div>`;
-            }
-            h += '</div>';
-        });
-        h += '</div></div>'; // bb-cols, bb-wrapper 닫기
-
-        // 값 표시 행 (그리드 아래, Y축 너비만큼 왼쪽 여백)
-        h += '<div class="lc-vals" style="padding-left:38px">';
-        s.options.forEach((opt, i) => {
-            h += `<div class="bb-val lc-val-cell" id="bbv-${i}">0명</div>`;
-        });
-        h += '</div>';
-
-        // 항목 레이블
-        h += '<div class="bb-labels" style="padding-left:38px">';
-        s.options.forEach(o => h += `<div class="bb-lb">${o}</div>`);
-        h += '</div>';
+        h += '<div id="line-grid-container"></div>';
 
         h += '<div class="bb-x-label-area" style="text-align:right; font-size:12px; font-weight:600; color:var(--text-secondary); margin-top:5px; padding-right:10px;">';
         h += '<span id="disp-x-title">항목</span>';
         h += '</div>';
 
-        h += '<svg id="line-svg" class="line-svg"></svg>';
         h += '</div>'; // bb-graph-area 닫기
         c.innerHTML = h;
 
@@ -247,8 +247,60 @@ const Builder = {
         c.querySelector('#x-axis-name').addEventListener('input', updateAxisText);
         c.querySelector('#y-axis-name').addEventListener('input', updateAxisText);
         c.querySelector('#y-axis-unit').addEventListener('input', updateAxisText);
+        c.querySelector('#y-axis-step').addEventListener('change', () => {
+            self.values = new Array(s.options.length).fill(0);
+            self.renderLineGrid(c);
+        });
+
+        this.renderLineGrid(c);
+    },
+
+    renderLineGrid(c) {
+        const s = this.survey;
+        const container = c.querySelector('#line-grid-container');
+        if (!container) return;
+
+        const yStep = +(c.querySelector('#y-axis-step')?.value || 1);
+        const rawMax = Math.max(...s.votes, 1);
+        let maxYCells = Math.ceil(rawMax / yStep) + 2;
+        if (maxYCells < 4) maxYCells = 4;
+        if (maxYCells > 20) maxYCells = 20;
+        const CELL_H = 28;
+
+        let h = '<div class="bb-wrapper">';
+        h += `<div class="bb-yaxis lc-yaxis" style="--cell-h:${CELL_H}px">`;
+        for (let y = maxYCells; y >= 1; y--) {
+            h += `<div class="bb-yl lc-yl" style="height:${CELL_H}px">${y * yStep}</div>`;
+        }
+        h += '<div class="bb-yl lc-yl lc-zero" style="height:12px">0</div>';
+        h += '</div>';
+
+        h += '<div class="bb-cols line-mode">';
+        s.options.forEach((opt, i) => {
+            h += `<div class="bb-col lc-col" data-idx="${i}" style="--cell-h:${CELL_H}px">`;
+            for (let y = maxYCells; y >= 1; y--) {
+                const val = y * yStep;
+                h += `<div class="bb-cell lc" data-y="${val}" data-i="${i}" style="height:${CELL_H}px;min-height:unset" title="${val}명"></div>`;
+            }
+            h += '</div>';
+        });
+        h += '</div></div>';
+
+        h += '<div class="lc-vals" style="padding-left:38px">';
+        s.options.forEach((opt, i) => {
+            h += `<div class="bb-val lc-val-cell" id="bbv-${i}">0명</div>`;
+        });
+        h += '</div>';
+
+        h += '<div class="bb-labels" style="padding-left:38px">';
+        s.options.forEach(o => h += `<div class="bb-lb">${o}</div>`);
+        h += '</div>';
+
+        h += '<svg id="line-svg" class="line-svg"></svg>';
+        container.innerHTML = h;
+
+        const self = this;
         c.querySelectorAll('.bb-cell.lc').forEach(cell => {
-            // 호버 시 해당 행의 y값 하이라이트
             cell.addEventListener('mouseenter', () => {
                 const y = +cell.dataset.y;
                 const yUnit = c.querySelector('#y-axis-unit').value || '';
@@ -257,17 +309,26 @@ const Builder = {
             cell.addEventListener('click', () => {
                 const i = +cell.dataset.i, y = +cell.dataset.y;
                 self.values[i] = (self.values[i] === y) ? 0 : y;
-                // 해당 열 모든 셀에서 dot 제거
+                // update visual
                 c.querySelectorAll(`.bb-cell.lc[data-i="${i}"]`).forEach(cl => cl.classList.remove('dot'));
-                // 선택된 셀에 dot 추가
                 if (self.values[i] > 0) cell.classList.add('dot');
-                // 값 표시 업데이트
                 const valEl = c.querySelector(`#bbv-${i}`);
                 const yUnit = c.querySelector('#y-axis-unit').value || '';
                 if (valEl) valEl.textContent = self.values[i] > 0 ? self.values[i] + yUnit : '0' + yUnit;
                 self.drawLines(c);
             });
         });
+
+        // Restore visual state
+        s.options.forEach((opt, i) => {
+            const v = self.values[i];
+            const cell = c.querySelector(`.bb-cell.lc[data-i="${i}"][data-y="${v}"]`);
+            if (cell) cell.classList.add('dot');
+            const valEl = c.querySelector(`#bbv-${i}`);
+            const yUnit = c.querySelector('#y-axis-unit').value || '';
+            if (valEl) valEl.textContent = v > 0 ? v + yUnit : '0' + yUnit;
+        });
+        self.drawLines(c);
     },
 
     drawLines(c) {
