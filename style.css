@@ -351,6 +351,12 @@ body {
 
 .bb-hint { text-align: center; color: var(--accent2); font-size: 14px; font-weight: 600; margin-bottom: 20px; padding: 10px; background: rgba(253,203,110,0.08); border-radius: var(--radius-xs); }
 
+/* Axis Settings */
+.bb-axis-settings { display: flex; justify-content: center; gap: 20px; margin-bottom: 20px; background: rgba(108, 92, 231, 0.05); padding: 12px; border-radius: var(--radius-sm); flex-wrap: wrap; }
+.bb-axis-settings label { font-size: 13px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+.bb-axis-inp { background: var(--bg-main); border: 1px solid rgba(108, 92, 231, 0.2); border-radius: 4px; padding: 6px 8px; font-size: 13px; color: var(--text-main); width: 80px; transition: border-color 0.2s, box-shadow 0.2s; }
+.bb-axis-inp:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2); }
+
 /* ===== Bar Builder ===== */
 .bb-wrapper { display: flex; gap: 0; user-select: none; }
 .bb-yaxis { display: flex; flex-direction: column; width: 36px; flex-shrink: 0; }
