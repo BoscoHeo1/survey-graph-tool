@@ -361,7 +361,7 @@ body {
 .bb-wrapper { display: flex; gap: 0; user-select: none; }
 .bb-yaxis { display: flex; flex-direction: column; width: 36px; flex-shrink: 0; }
 .bb-yl { flex: 1; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; color: var(--text-muted); min-height: 20px; }
-.bb-cols { display: flex; flex: 1; gap: 2px; border-left: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); }
+.bb-cols { display: flex; flex: 1; gap: 2px; border-left: 2px solid var(--text-muted); border-bottom: 2px solid var(--text-muted); padding: 0 16px; }
 .bb-cols.line-mode .bb-cell { cursor: crosshair; }
 .bb-col { flex: 1; display: flex; flex-direction: column; position: relative; }
 .bb-cell { flex: 1; min-height: 20px; border-top: 1px solid rgba(108,92,231,0.06); cursor: pointer; transition: background 0.15s; border-radius: 2px; }
@@ -370,7 +370,7 @@ body {
 .bb-cell.dot { position: relative; }
 .bb-cell.dot::after { content: ''; position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; border-radius: 50%; background: var(--primary); border: 3px solid white; transform: translate(-50%,-50%); z-index: 2; box-shadow: 0 2px 8px rgba(108,92,231,0.5); }
 .bb-val { text-align: center; padding: 4px 0; font-size: 13px; font-weight: 800; color: var(--primary-light); }
-.bb-labels { display: flex; padding-left: 38px; }
+.bb-labels { display: flex; padding: 0 16px 0 54px; }
 .bb-lb { flex: 1; text-align: center; font-size: 12px; font-weight: 600; padding: 4px 2px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .line-svg { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 3; }
 
@@ -384,7 +384,7 @@ body {
 /* bb-wrapper에 border-bottom을 추가해 0 축선을 표현 */
 .bb-wrapper { border-bottom: 2px solid var(--text-muted); }
 /* 값 표시 행 */
-.lc-vals { display: flex; margin-top: 4px; }
+.lc-vals { display: flex; margin-top: 4px; padding: 0 16px 0 54px; }
 .lc-val-cell { flex: 1; text-align: center; font-size: 13px; font-weight: 800;
                color: var(--primary-light); padding: 2px 0; }
 
